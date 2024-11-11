@@ -1,6 +1,6 @@
 {
 	"version": 2,
-	"name": "greatrwb",
+	"name": "storage",
 	"builds": [
 		{
 			"src": "dist/index.js",
