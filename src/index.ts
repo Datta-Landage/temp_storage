@@ -1,44 +1,9 @@
-import {
-	type ObjectCannedACL,
-	PutObjectCommand,
-	S3Client,
-} from "@aws-sdk/client-s3";
+import axios from "axios";
 import bodyParser from "body-parser";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
-import { v4 as uuidv4 } from "uuid";
 const app = express();
-
-const s3Client = new S3Client({
-	endpoint: "https://blr1.digitaloceanspaces.com",
-	forcePathStyle: false,
-	region: "BLR1",
-	credentials: {
-		accessKeyId: "DO00E2968MHNPADGYAXF",
-		secretAccessKey: "zy7XZdbVpB5aZXEvzq9B333AkbVCn6713+K3eOngKBE",
-	},
-});
-
-const uploadObject = async (file: any, fileName: string) => {
-	const params = {
-		Bucket: "t-static",
-		Key: fileName, // Ensure the Key includes the full path within the bucket
-		Body: file.buffer,
-		ACL: "public-read" as ObjectCannedACL, // Ensure the ACL value is valid
-		ContentType: file.mimetype, // Set the Content-Type based on file extension
-		ContentDisposition: "inline", // Ensure the Content-Disposition is set to inline
-	};
-
-	try {
-		const data = await s3Client.send(new PutObjectCommand(params));
-		console.log(`Successfully uploaded object: ${params.Bucket}/${params.Key}`);
-		return data;
-	} catch (err) {
-		console.error("Error uploading object:", err);
-		throw err;
-	}
-};
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -51,11 +16,10 @@ app.get("/", (req, res) => {
 });
 
 app.post("/upload", async (req, res) => {
-	console.log("req.files", req.files);
 	const files = req.files as
 		| { [fieldname: string]: Express.Multer.File[] }
 		| Express.Multer.File[];
-
+	const sessionId = req.query.sessionId;
 	if (!files) {
 		return res.status(400).send("No file uploaded.");
 	}
@@ -69,35 +33,19 @@ app.post("/upload", async (req, res) => {
 
 	console.log("file", file);
 
-	// Validate file type
-	const validTypes = [
-		"image/png",
-		"image/jpeg",
-		"image/jpg",
-		"image/gif",
-		"image/webp",
-		"video/mp4",
-	];
-	if (!validTypes.includes(file.mimetype)) {
-		return res.status(400).send("Invalid file type.");
-	}
-
-	// Validate file size (<= 5 MB)
-	const maxSize = 5 * 1024 * 1024; // 5 MB in bytes
-	if (file?.size > maxSize) {
-		return res.status(400).send("File size exceeds the 5 MB limit.");
-	}
-	const fileName = uuidv4() + file?.mimetype?.replace("image/", ".");
-	try {
-		const uploadImage = await uploadObject(file, fileName);
-		if (!uploadImage) {
-			return res.status(400).send("Error uploading file.");
-		}
-		const returnUrl = `https://t-static.blr1.digitaloceanspaces.com/${fileName}`;
-		res.status(201).send({ url: returnUrl });
-	} catch (err) {
-		res.status(500).send("Error uploading file.");
-	}
+	const config = {
+		url: `https://graph.facebook.com/v21.0/${sessionId}`,
+		method: "POST",
+		headers: {
+			Authorization:
+				"OAuth EAAQk2VVQJsEBOZBP8xHCHCZAvBWeAX1APC5E08Y0PCMCTGemp6OUsJrugkr6nNNYWnnrJcTL18GHoRzRBPuW2L0CGQvkK98djZBCxaAkUxKbH148EOMtYGxvj87NTqPz9TfoyjdVWMp5sKgZBI5tIdI4yvGBtyxsRCY5y81ZBvlYdLQNCaqQQP94ZC5llBP1EtJAZDZD",
+			file_offset: 0,
+			"Content-Type": "application/octet-stream",
+		},
+		data: file.buffer,
+	};
+	const uploadFile = await axios(config);
+	res.send(uploadFile.data);
 });
 
 app.listen(3000, () => {
